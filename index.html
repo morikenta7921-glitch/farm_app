@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FarmManage | プレミアム営農管理</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Outfit:wght@500;600;700&display=swap"
+        rel="stylesheet">
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    <link rel="stylesheet" href="style.css">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+
+<body>
+    <div id="app" class="sidebar-minimized tools-minimized">
+        <!-- Floating Menu Toggles -->
+        <button id="btn-sidebar-toggle" class="floating-menu-btn sidebar-btn" title="メニュー">
+            <i data-lucide="menu"></i>
+        </button>
+        <button id="btn-tools-toggle" class="floating-menu-btn tools-btn" title="ツール">
+            <i data-lucide="settings"></i>
+        </button>
+
+        <!-- Sidebar Navigation -->
+        <nav class="sidebar">
+            <div class="logo">
+                <i data-lucide="sprout"></i>
+                <span>FarmManage</span>
+            </div>
+            <ul class="nav-links">
+                <li data-view="farms"><i data-lucide="home"></i><span>農場一覧</span></li>
+                <li data-view="fields"><i data-lucide="layers"></i><span>圃場一覧</span></li>
+                <li data-view="history"><i data-lucide="list"></i><span>作業履歴</span></li>
+            </ul>
+        </nav>
+
+        <!-- Main Content -->
+        <main>
+            <!-- Map View -->
+            <section id="view-map" class="view active">
+                <div id="map-container">
+                    <div id="map"></div>
+                    <div class="map-controls glass">
+                        <button id="btn-draw" title="圃場を描画"><i data-lucide="pentagon"></i><span>描画開始</span></button>
+                        <button id="btn-add-log-map" title="作業を登録"><i
+                                data-lucide="plus-circle"></i><span>作業登録</span></button>
+                        <button id="btn-import-trigger" title="QGISデータを取り込み"><i
+                                data-lucide="upload"></i><span>インポート</span></button>
+                        <input type="file" id="input-geojson" accept=".geojson,.json" class="hidden">
+                        <button id="btn-locate" title="現在地"><i data-lucide="locate"></i></button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- History View -->
+            <section id="view-history" class="view">
+                <header class="view-header">
+                    <h1>作業履歴</h1>
+                    <div class="header-actions">
+                        <button id="btn-export-history" class="btn-secondary"><i
+                                data-lucide="download"></i>CSV出力</button>
+                        <button id="btn-add-log" class="btn-primary"><i data-lucide="plus"></i>作業登録</button>
+                    </div>
+                </header>
+                <div class="history-container glass">
+                    <table id="history-table">
+                        <thead>
+                            <tr>
+                                <th>日付</th>
+                                <th>圃場</th>
+                                <th>作業内容</th>
+                                <th>作業者</th>
+                                <th>写真</th>
+                                <th>メモ</th>
+                            </tr>
+                        </thead>
+                        <tbody id="history-body">
+                            <!-- Data injected via JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Farms View -->
+            <section id="view-farms" class="view">
+                <header class="view-header">
+                    <h1>農場一覧</h1>
+                    <div class="header-actions">
+                        <button id="btn-add-farm" class="btn-primary"><i data-lucide="plus"></i>農場登録</button>
+                    </div>
+                </header>
+                <div class="farms-container glass">
+                    <table id="farms-table">
+                        <thead>
+                            <tr>
+                                <th>農場名</th>
+                                <th>圃場数</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="farms-body">
+                            <!-- Data injected via JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Fields View -->
+            <section id="view-fields" class="view">
+                <header class="view-header">
+                    <h1>圃場一覧</h1>
+                    <div class="header-actions">
+                        <button id="btn-bulk-delete" class="btn-delete hidden"><i
+                                data-lucide="trash-2"></i>選択削除</button>
+                    </div>
+                </header>
+                <div class="fields-container glass">
+                    <table id="fields-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 30px;"><input type="checkbox" id="check-all-fields"></th>
+                                <th>名前</th>
+                                <th class="hide-mobile">農場</th>
+                                <th>面積(a)</th>
+                                <th>作物</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="fields-body">
+                            <!-- Data injected via JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Other Views... -->
+        </main>
+
+        <!-- Bottom Navigation (Mobile Only) -->
+        <nav class="bottom-nav">
+            <div class="nav-item" data-view="farms"><i data-lucide="home"></i><span>農場</span></div>
+            <div class="nav-item" data-view="fields"><i data-lucide="layers"></i><span>圃場</span></div>
+            <div class="nav-item" data-view="history"><i data-lucide="list"></i><span>履歴</span></div>
+        </nav>
+
+        <!-- Modal for Registration -->
+        <div id="modal-overlay" class="hidden">
+            <!-- Existing Opeartion Form -->
+            <div id="modal-operation" class="modal glass hidden">
+                <header>
+                    <h2 id="modal-title">作業登録</h2>
+                    <button class="btn-close-modal"><i data-lucide="x"></i></button>
+                </header>
+                <form id="form-operation">
+                    <!-- ... fields same as before ... -->
+                    <div class="form-group">
+                        <label>日付</label>
+                        <input type="date" id="input-date" required>
+                    </div>
+                    <div class="form-group">
+                        <label>圃場</label>
+                        <select id="select-field" required>
+                            <option value="">選択してください</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>作業内容</label>
+                        <select id="select-type" required>
+                            <option value="播種">播種</option>
+                            <option value="田植え">田植え</option>
+                            <option value="施肥">施肥</option>
+                            <option value="防除">防除</option>
+                            <option value="収穫">収穫</option>
+                            <option value="その他">その他</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>作業者</label>
+                        <input type="text" id="input-worker" placeholder="氏名を入力">
+                    </div>
+                    <div class="form-group">
+                        <label>対象作物</label>
+                        <select id="select-crop-target" required>
+                            <option value="未設定">未設定</option>
+                            <option value="コシヒカリ">コシヒカリ</option>
+                            <option value="つや姫">つや姫</option>
+                            <option value="新之助">新之助</option>
+                            <option value="あきたこまち">あきたこまち</option>
+                            <option value="その他">その他</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>写真・動画</label>
+                        <input type="file" id="input-media" accept="image/*,video/*">
+                    </div>
+                    <div class="form-group">
+                        <label>メモ</label>
+                        <textarea id="input-notes" rows="3"></textarea>
+                    </div>
+                    <button type="submit" class="btn-submit">保存する</button>
+                </form>
+            </div>
+
+            <!-- Import Selection Form -->
+            <div id="modal-import" class="modal glass hidden">
+                <header>
+                    <h2>インポート設定</h2>
+                    <button class="btn-close-modal"><i data-lucide="x"></i></button>
+                </header>
+                <div class="form-group">
+                    <label>所属させる農場を選択</label>
+                    <select id="select-import-farm" required>
+                        <!-- Injected via JS -->
+                    </select>
+                </div>
+                <button id="btn-confirm-import" class="btn-submit">インポートを開始</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div id="toast-container"></div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script src="app.js"></script>
+</body>
+
+</html>
