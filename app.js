@@ -22,29 +22,23 @@ let state = {
     isDrawing: false,
     tempPoints: [],
     tempPolygon: null,
-    pendingGeoJSON: null
+    pendingGeoJSON: null,
+    hasInitialFocus: false // 初回起動時のフォーカス管理
 };
 
 // Initialize Map
 const map = L.map('map', {
-    zoomControl: false
+    zoomControl: false,
+    maxZoom: 22 // 地図全体の最大ズームレベルを引き上げ
 }).setView([35.6895, 139.6917], 15);
 
-const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '&copy; OpenStreetMap'
+const googleSatellite = L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
+    attribution: '&copy; Google',
+    maxNativeZoom: 20, // Googleが提供する画像の最大ズーム
+    maxZoom: 22        // それ以上にズームした場合は画像を拡大して表示
 });
 
-const gsiSatellite = L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg', {
-    attribution: '国土地理院'
-});
-
-gsiSatellite.addTo(map);
-
-const baseMaps = {
-    "航空写真": gsiSatellite,
-    "標準地図": osm
-};
-L.control.layers(baseMaps, null, { position: 'bottomright' }).addTo(map);
+googleSatellite.addTo(map);
 
 // App Logic
 function init() {
@@ -82,6 +76,12 @@ function loadData() {
             state.fields = data.fields || [];
             state.logs = data.logs || [];
             renderAll();
+
+            // 初回読み込み時のみ、一番上の農場へ自動ズーム
+            if (!state.hasInitialFocus && state.farms.length > 0) {
+                state.hasInitialFocus = true;
+                autoFocusFirstFarm();
+            }
         } else {
             migrateLocalData();
         }
@@ -547,8 +547,22 @@ function focusOnFarm(farmId) {
     switchView(null); // パネルを閉じる
 
     // 少し余白を持たせてズーム
-    map.fitBounds(bounds, { padding: [80, 80], maxZoom: 17 });
+    map.fitBounds(bounds, { padding: [80, 80], maxZoom: 19 }); // 17 -> 19 へ引き上げ
     lucide.createIcons();
+}
+
+function autoFocusFirstFarm() {
+    if (state.farms.length > 0) {
+        const firstFarm = state.farms[0];
+        const farmFields = state.fields.filter(f => f.farmId === firstFarm.id);
+        if (farmFields.length > 0) {
+            const bounds = L.latLngBounds();
+            farmFields.forEach(field => {
+                field.polygon.forEach(coord => bounds.extend(coord));
+            });
+            map.fitBounds(bounds, { padding: [80, 80], maxZoom: 19 }); // 17 -> 19 へ引き上げ
+        }
+    }
 }
 
 function deleteFarm(id) {
