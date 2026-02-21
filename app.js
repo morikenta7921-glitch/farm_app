@@ -1,3 +1,18 @@
+const firebaseConfig = {
+    apiKey: "AIzaSyCnCb-wFeYsB-dH-YqRn-ZK0KA_1HHCb-M",
+    authDomain: "farm-app-bf9eb.firebaseapp.com",
+    projectId: "farm-app-bf9eb",
+    databaseURL: "https://farm-app-bf9eb-default-rtdb.firebaseio.com/", // ここを追加
+    storageBucket: "farm-app-bf9eb.firebasestorage.app",
+    messagingSenderId: "1041481730841",
+    appId: "1:1041481730841:web:722aa0b890a3b6d5dfd388",
+    measurementId: "G-RZFPQHDJY9"
+};
+
+// Initialize Firebase
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
 // State Management
 let state = {
     farms: [],
@@ -33,22 +48,85 @@ L.control.layers(baseMaps, null, { position: 'bottomright' }).addTo(map);
 
 // App Logic
 function init() {
-    loadData();
     setupEventListeners();
-    renderAll();
+    loadData(); // Firebaseのリスナー開始
     lucide.createIcons();
 }
 
 function loadData() {
+    console.log("Connecting to Firebase...");
+
+    // まずローカルのデータを一旦読み込んで表示（レスポンス改善）
     const savedFarms = localStorage.getItem('fm_farms');
     const savedFields = localStorage.getItem('fm_fields');
     const savedLogs = localStorage.getItem('fm_logs');
     if (savedFarms) state.farms = JSON.parse(savedFarms);
     if (savedFields) state.fields = JSON.parse(savedFields);
     if (savedLogs) state.logs = JSON.parse(savedLogs);
+    renderAll();
+
+    // 接続状態の監視
+    db.ref('.info/connected').on('value', (snap) => {
+        if (snap.val() === true) {
+            console.log("Firebase Connected!");
+        } else {
+            console.log("Firebase Disconnected. Waiting...");
+        }
+    });
+
+    // データのリアルタイム同期
+    db.ref('farmData').on('value', (snapshot) => {
+        const data = snapshot.val();
+        if (data) {
+            state.farms = data.farms || [];
+            state.fields = data.fields || [];
+            state.logs = data.logs || [];
+            renderAll();
+        } else {
+            migrateLocalData();
+        }
+    }, (error) => {
+        console.error("Firebase Sync Error:", error);
+        alert("データベース同期に失敗しました。URL設定またはルールを確認してください。\n" + error.message);
+    });
+}
+
+function migrateLocalData() {
+    console.log("Migrating local data to cloud...");
+    const savedFarms = localStorage.getItem('fm_farms');
+    const savedFields = localStorage.getItem('fm_fields');
+    const savedLogs = localStorage.getItem('fm_logs');
+
+    if (savedFarms || savedFields || savedLogs) {
+        state.farms = savedFarms ? JSON.parse(savedFarms) : [];
+        state.fields = savedFields ? JSON.parse(savedFields) : [];
+        state.logs = savedLogs ? JSON.parse(savedLogs) : [];
+
+        // クラウドへ保存
+        saveData();
+
+        // 移行が完了したら、重複を防ぐためにLocalStorageを消去（任意）
+        // localStorage.clear();
+        console.log("Migration complete.");
+    }
 }
 
 function saveData() {
+    const dataToSave = {
+        farms: state.farms,
+        fields: state.fields,
+        logs: state.logs
+    };
+
+    // Firebase（クラウド）へ保存
+    db.ref('farmData').set(dataToSave).then(() => {
+        console.log("Cloud Save Success");
+    }).catch(err => {
+        console.error("Firebase Save Error:", err);
+        alert("クラウド保存失敗: " + err.message);
+    });
+
+    // バックアップ用 LocalStorage
     localStorage.setItem('fm_farms', JSON.stringify(state.farms));
     localStorage.setItem('fm_fields', JSON.stringify(state.fields));
     localStorage.setItem('fm_logs', JSON.stringify(state.logs));
@@ -564,6 +642,7 @@ function renderAll() {
     renderHistory();
     renderFieldsList();
     renderFarmsList();
+    lucide.createIcons(); // アイコンを確実に表示
 }
 
 function showToast(message) {
