@@ -242,13 +242,14 @@ button {
 }
 
 .btn-secondary {
-    background: rgba(255, 255, 255, 0.1);
-    color: white;
-    border: 1px solid var(--glass-border);
+    background: rgba(255, 255, 255, 0.8);
+    color: #333 !important;
+    border: 1px solid rgba(0, 0, 0, 0.2);
 }
 
 .btn-secondary:hover {
-    background: rgba(255, 255, 255, 0.2);
+    background: white;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 .btn-delete {
@@ -298,10 +299,44 @@ th {
     border-bottom: 1px solid var(--glass-border);
 }
 
+th.sortable {
+    cursor: pointer;
+    user-select: none;
+    position: relative;
+    padding-right: 25px;
+    transition: background 0.2s ease;
+}
+
+th.sortable:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.sort-icon {
+    width: 14px;
+    height: 14px;
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    opacity: 0.5;
+}
+
+th.active-sort .sort-icon {
+    opacity: 1;
+    color: var(--primary);
+}
+
 td {
     padding: 0.75rem 1rem;
     border-bottom: 1px solid rgba(255, 255, 255, 0.03);
     font-size: 0.85rem;
+}
+
+.media-list-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    max-width: 130px;
 }
 
 .history-media-thumb {
@@ -449,6 +484,17 @@ textarea:focus {
 
 .nav-item.active {
     color: var(--primary-light);
+}
+
+.editable-cell {
+    cursor: pointer;
+    color: #333;
+    transition: color 0.2s ease;
+}
+
+.editable-cell:hover {
+    color: var(--primary);
+    text-decoration: underline;
 }
 
 /* Toast Notification */

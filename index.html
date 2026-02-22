@@ -74,12 +74,18 @@
                     <table id="history-table">
                         <thead>
                             <tr>
-                                <th>日付</th>
-                                <th>圃場</th>
-                                <th>作業内容</th>
-                                <th>作業者</th>
-                                <th>写真</th>
+                                <th class="sortable" data-sort="date">日付 <i data-lucide="chevrons-up-down"
+                                        class="sort-icon"></i></th>
+                                <th class="sortable" data-sort="fieldId">圃場 <i data-lucide="chevrons-up-down"
+                                        class="sort-icon"></i></th>
+                                <th class="sortable" data-sort="crop">対象作物 <i data-lucide="chevrons-up-down"
+                                        class="sort-icon"></i></th>
+                                <th class="sortable" data-sort="type">作業内容 <i data-lucide="chevrons-up-down"
+                                        class="sort-icon"></i></th>
                                 <th>メモ</th>
+                                <th>写真・動画</th>
+                                <th class="sortable" data-sort="worker">作業者 <i data-lucide="chevrons-up-down"
+                                        class="sort-icon"></i></th>
                             </tr>
                         </thead>
                         <tbody id="history-body">
@@ -160,7 +166,7 @@
                     <button class="btn-close-modal"><i data-lucide="x"></i></button>
                 </header>
                 <form id="form-operation">
-                    <!-- ... fields same as before ... -->
+                    <!-- ... fields reordered ... -->
                     <div class="form-group">
                         <label>日付</label>
                         <input type="date" id="input-date" required>
@@ -169,6 +175,17 @@
                         <label>圃場</label>
                         <select id="select-field" required>
                             <option value="">選択してください</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>対象作物</label>
+                        <select id="select-crop-target" required>
+                            <option value="未設定">未設定</option>
+                            <option value="コシヒカリ">コシヒカリ</option>
+                            <option value="つや姫">つや姫</option>
+                            <option value="新之助">新之助</option>
+                            <option value="あきたこまち">あきたこまち</option>
+                            <option value="その他">その他</option>
                         </select>
                     </div>
                     <div class="form-group">
@@ -183,27 +200,16 @@
                         </select>
                     </div>
                     <div class="form-group">
-                        <label>作業者</label>
-                        <input type="text" id="input-worker" placeholder="氏名を入力">
-                    </div>
-                    <div class="form-group">
-                        <label>対象作物</label>
-                        <select id="select-crop-target" required>
-                            <option value="未設定">未設定</option>
-                            <option value="コシヒカリ">コシヒカリ</option>
-                            <option value="つや姫">つや姫</option>
-                            <option value="新之助">新之助</option>
-                            <option value="あきたこまち">あきたこまち</option>
-                            <option value="その他">その他</option>
-                        </select>
+                        <label>メモ</label>
+                        <textarea id="input-notes" rows="3"></textarea>
                     </div>
                     <div class="form-group">
                         <label>写真・動画</label>
-                        <input type="file" id="input-media" accept="image/*,video/*">
+                        <input type="file" id="input-media" accept="image/*,video/*" multiple>
                     </div>
                     <div class="form-group">
-                        <label>メモ</label>
-                        <textarea id="input-notes" rows="3"></textarea>
+                        <label>作業者</label>
+                        <input type="text" id="input-worker" placeholder="氏名を入力">
                     </div>
                     <button type="submit" class="btn-submit">保存する</button>
                 </form>

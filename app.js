@@ -23,7 +23,10 @@ let state = {
     tempPoints: [],
     tempPolygon: null,
     pendingGeoJSON: null,
-    hasInitialFocus: false // 初回起動時のフォーカス管理
+    hasInitialFocus: false, // 初回起動時のフォーカス管理
+    sortConfig: { key: 'date', direction: 'desc' }, // 履歴のソート設定
+    crops: [], // 作物リスト
+    taskTypes: [] // 作業内容リスト
 };
 
 // Initialize Map
@@ -75,6 +78,8 @@ function loadData() {
             state.farms = data.farms || [];
             state.fields = data.fields || [];
             state.logs = data.logs || [];
+            state.crops = data.crops || ["コシヒカリ", "つや姫", "新之助", "あきたこまち"];
+            state.taskTypes = data.taskTypes || ["播種", "田植え", "施肥", "防除", "収穫"];
             renderAll();
 
             // 初回読み込み時のみ、一番上の農場へ自動ズーム
@@ -115,7 +120,9 @@ function saveData() {
     const dataToSave = {
         farms: state.farms,
         fields: state.fields,
-        logs: state.logs
+        logs: state.logs,
+        crops: state.crops,
+        taskTypes: state.taskTypes
     };
 
     // Firebase（クラウド）へ保存
@@ -186,12 +193,69 @@ function setupEventListeners() {
 
     document.getElementById('btn-locate').addEventListener('click', () => map.locate({ setView: true, maxZoom: 16 }));
 
+    // History Sorting Listeners
+    document.querySelectorAll('#history-table th.sortable').forEach(th => {
+        th.addEventListener('click', () => {
+            const key = th.dataset.sort;
+            const direction = (state.sortConfig.key === key && state.sortConfig.direction === 'asc') ? 'desc' : 'asc';
+            state.sortConfig = { key, direction };
+            renderHistory();
+        });
+    });
+
     document.getElementById('btn-add-farm').addEventListener('click', () => {
         const name = prompt("農場名を入力してください:");
         if (name) {
             state.farms.push({ id: 'farm_' + Date.now(), name: name });
             saveData();
             renderFarmsList();
+        }
+    });
+
+    document.getElementById('select-crop-target').addEventListener('change', (e) => {
+        const val = e.target.value;
+        if (val === '__add__') {
+            const name = prompt("追加する作物の名前を入力してください:");
+            if (name && !state.crops.includes(name)) {
+                state.crops.push(name);
+                saveData();
+                updateCropSelects();
+                e.target.value = name;
+            } else {
+                e.target.value = "未設定";
+            }
+        } else if (val === '__remove__') {
+            const target = prompt("削除する作物の名前を確認のため正確に入力してください:\n(登録済みの履歴には影響しません)");
+            if (target && state.crops.includes(target)) {
+                state.crops = state.crops.filter(c => c !== target);
+                saveData();
+                updateCropSelects();
+            }
+            e.target.value = "未設定";
+        }
+    });
+
+    document.getElementById('select-type').addEventListener('change', (e) => {
+        const val = e.target.value;
+        if (val === '__add__') {
+            const name = prompt("追加する作業内容の名前を入力してください:");
+            if (name && !state.taskTypes.includes(name)) {
+                state.taskTypes.push(name);
+                saveData();
+                updateTaskTypeSelects();
+                e.target.value = name;
+            } else {
+                updateTaskTypeSelects();
+            }
+        } else if (val === '__remove__') {
+            const target = prompt("削除する作業内容の名前を確認のため正確に入力してください:\n(登録済みの履歴には影響しません)");
+            if (target && state.taskTypes.includes(target)) {
+                state.taskTypes = state.taskTypes.filter(t => t !== target);
+                saveData();
+                updateTaskTypeSelects();
+            } else {
+                updateTaskTypeSelects();
+            }
         }
     });
 
@@ -290,7 +354,15 @@ function finishDrawing() {
     }
     const crop = prompt("植え付け作物を入力してください (例: コシヒカリ):") || '未設定';
 
-    const farmId = state.farms.length > 0 ? state.farms[0].id : null;
+    let farmId = null;
+    if (state.farms.length > 0) {
+        const farmList = state.farms.map((f, i) => `${i + 1}: ${f.name}`).join('\n');
+        const farmIndex = prompt(`所属させる農場を番号で選んでください:\n${farmList}\n(キャンセルで未割当)`, "1");
+        if (farmIndex && state.farms[farmIndex - 1]) {
+            farmId = state.farms[farmIndex - 1].id;
+        }
+    }
+
     const area = calculateArea(state.tempPoints);
 
     const newField = {
@@ -350,15 +422,28 @@ function renderFieldsOnMap() {
         `;
         poly.bindTooltip(labelContent, { permanent: true, direction: 'center', className: 'field-label' });
 
+        const fieldLogs = state.logs.filter(l => l.fieldId === field.id);
+        const lastLog = fieldLogs.length > 0 ? fieldLogs.sort((a, b) => new Date(b.date) - new Date(a.date))[0] : null;
+        const lastLogHtml = lastLog ? `<p><strong>最終作業:</strong> ${lastLog.date} (${lastLog.type})</p>` : '<p><strong>最終作業:</strong> なし</p>';
+
         const popupContent = `
             <div class="map-popup">
                 <h3>${field.name}</h3>
                 <p><strong>面積:</strong> ${field.area} a</p>
                 <p><strong>作物:</strong> ${field.crop}</p>
                 <p><strong>所属:</strong> ${state.farms.find(f => f.id === field.farmId)?.name || '未割当'}</p>
-                <button class="btn-primary" style="padding: 0.3rem 0.6rem; margin-top: 0.5rem; width: 100%; font-size: 0.8rem;" onclick="openLogModalForField('${field.id}')">
-                    <i data-lucide="plus-circle" style="width:12px"></i> 作業登録
-                </button>
+                ${lastLogHtml}
+                <div style="display: flex; flex-wrap: wrap; gap: 5px; margin-top: 0.5rem;">
+                    <button class="btn-primary" style="flex: 1 1 100%; padding: 0.3rem; font-size: 0.8rem;" onclick="openLogModalForField('${field.id}')">
+                        <i data-lucide="plus-circle" style="width:12px"></i> 作業登録
+                    </button>
+                    <button class="btn-secondary" style="flex: 1; padding: 0.3rem; font-size: 0.8rem;" onclick="editFieldCrop('${field.id}')">
+                        <i data-lucide="edit-3" style="width:12px"></i> 作物変更
+                    </button>
+                    <button class="btn-secondary" style="flex: 1; padding: 0.3rem; font-size: 0.8rem;" onclick="editFieldFarm('${field.id}')">
+                        <i data-lucide="map-pin" style="width:12px"></i> 農場変更
+                    </button>
+                </div>
             </div>
         `;
         poly.bindPopup(popupContent);
@@ -383,6 +468,64 @@ function updateFieldSelects() {
         select.appendChild(opt);
     });
     if (state.fields.find(f => f.id === currentVal)) {
+        select.value = currentVal;
+    }
+}
+
+function updateCropSelects() {
+    const select = document.getElementById('select-crop-target');
+    if (!select) return;
+    const currentVal = select.value;
+    select.innerHTML = '<option value="未設定">未設定</option>';
+
+    state.crops.forEach(crop => {
+        const opt = document.createElement('option');
+        opt.value = crop;
+        opt.innerText = crop;
+        select.appendChild(opt);
+    });
+
+    // 管理用特殊アクション
+    select.innerHTML += `
+        <option value="" disabled>──────────</option>
+        <option value="__add__">+ 新しい作物を追加</option>
+        <option value="__remove__">× 作物を削除</option>
+    `;
+
+    if (state.crops.includes(currentVal) || currentVal === "未設定") {
+        select.value = currentVal;
+    }
+}
+
+function updateTaskTypeSelects() {
+    const select = document.getElementById('select-type');
+    if (!select) return;
+    const currentVal = select.value;
+    select.innerHTML = '';
+
+    state.taskTypes.forEach(type => {
+        const opt = document.createElement('option');
+        opt.value = type;
+        opt.innerText = type;
+        select.appendChild(opt);
+    });
+
+    // その他を追加（なければ）
+    if (!state.taskTypes.includes("その他")) {
+        const opt = document.createElement('option');
+        opt.value = "その他";
+        opt.innerText = "その他";
+        select.appendChild(opt);
+    }
+
+    // 管理用特殊アクション
+    select.innerHTML += `
+        <option value="" disabled>──────────</option>
+        <option value="__add__">+ 新しい作業内容を追加</option>
+        <option value="__remove__">× 作業内容を削除</option>
+    `;
+
+    if (state.taskTypes.includes(currentVal) || currentVal === "その他") {
         select.value = currentVal;
     }
 }
@@ -464,9 +607,13 @@ function renderFieldsList() {
         tr.innerHTML = `
             <td><input type="checkbox" class="field-check" data-id="${field.id}"></td>
             <td>${field.name}</td>
-            <td class="hide-mobile">${farmName}</td>
+            <td class="hide-mobile editable-cell" onclick="editFieldFarm('${field.id}')">
+                ${farmName} <i data-lucide="edit-2" style="width:10px; opacity:0.5"></i>
+            </td>
             <td>${field.area || 0}</td>
-            <td>${field.crop || '-'}</td>
+            <td class="editable-cell" onclick="editFieldCrop('${field.id}')">
+                ${field.crop || '-'} <i data-lucide="edit-2" style="width:10px; opacity:0.5"></i>
+            </td>
             <td class="table-actions">
                 <button title="削除" onclick="deleteField('${field.id}')"><i data-lucide="trash-2" style="width:14px"></i></button>
             </td>
@@ -505,6 +652,38 @@ function deleteField(id) {
     state.fields = state.fields.filter(f => f.id !== id);
     saveData();
     renderAll();
+}
+
+function editFieldCrop(id) {
+    const field = state.fields.find(f => f.id === id);
+    if (!field) return;
+    const newCrop = prompt(`「${field.name}」の作物を入力してください:`, field.crop);
+    if (newCrop !== null) {
+        field.crop = newCrop || '未設定';
+        saveData();
+        renderAll();
+        showToast('作物を更新しました');
+    }
+}
+
+function editFieldFarm(id) {
+    const field = state.fields.find(f => f.id === id);
+    if (!field) return;
+
+    if (state.farms.length === 0) {
+        alert("先に農場を登録してください。");
+        return;
+    }
+
+    const farmList = state.farms.map((f, i) => `${i + 1}: ${f.name}`).join('\n');
+    const farmIndex = prompt(`「${field.name}」を移動させる農場を番号で選んでください:\n${farmList}\n(キャンセルで変更なし)`, "1");
+
+    if (farmIndex && state.farms[farmIndex - 1]) {
+        field.farmId = state.farms[farmIndex - 1].id;
+        saveData();
+        renderAll();
+        showToast('所属農場を更新しました');
+    }
 }
 
 function renderFarmsList() {
@@ -566,9 +745,9 @@ function autoFocusFirstFarm() {
 }
 
 function deleteFarm(id) {
-    if (!confirm('この農場を削除しますか？所属する圃場は「未割当」になります。')) return;
+    if (!confirm('この農場を削除しますか？\n所属するすべての圃場も一緒に削除されます。')) return;
     state.farms = state.farms.filter(f => f.id !== id);
-    state.fields = state.fields.map(f => { if (f.farmId === id) f.farmId = null; return f; });
+    state.fields = state.fields.filter(f => f.farmId !== id);
     saveData();
     renderAll();
 }
@@ -588,27 +767,72 @@ function renderHistory() {
     const body = document.getElementById('history-body');
     if (!body) return;
     body.innerHTML = '';
-    state.logs.forEach(log => {
+
+    // ソート処理
+    const sortedLogs = [...state.logs].sort((a, b) => {
+        let valA = a[state.sortConfig.key] || '';
+        let valB = b[state.sortConfig.key] || '';
+
+        // 圃場名でのソートの場合はIDではなく名前で比較
+        if (state.sortConfig.key === 'fieldId') {
+            valA = state.fields.find(f => f.id === a.fieldId)?.name || '';
+            valB = state.fields.find(f => f.id === b.fieldId)?.name || '';
+        }
+
+        if (valA < valB) return state.sortConfig.direction === 'asc' ? -1 : 1;
+        if (valA > valB) return state.sortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
+    });
+
+    updateSortIcons();
+
+    sortedLogs.forEach(log => {
         const fieldName = state.fields.find(f => f.id === log.fieldId)?.name || '不明';
         const tr = document.createElement('tr');
+
         let mediaHtml = '-';
-        if (log.media) {
-            if (log.media.type.startsWith('image/')) {
-                mediaHtml = `<img src="${log.media.url}" class="history-media-thumb" onclick="window.open('${log.media.url}')">`;
-            } else if (log.media.type.startsWith('video/')) {
-                mediaHtml = `<video src="${log.media.url}" class="history-media-thumb" onclick="window.open('${log.media.url}')"></video>`;
-            }
+        // media または mediaList (複数) を考慮
+        const mediaList = log.mediaList || (log.media ? [log.media] : []);
+
+        if (mediaList.length > 0) {
+            mediaHtml = `<div class="media-list-container">`;
+            mediaList.forEach(m => {
+                if (m.type.startsWith('image/')) {
+                    mediaHtml += `<img src="${m.url}" class="history-media-thumb" onclick="window.open('${m.url}')">`;
+                } else if (m.type.startsWith('video/')) {
+                    mediaHtml += `<video src="${m.url}" class="history-media-thumb" onclick="window.open('${m.url}')"></video>`;
+                }
+            });
+            mediaHtml += `</div>`;
         }
+
         tr.innerHTML = `
             <td>${log.date}</td>
             <td>${fieldName}</td>
-            <td>${log.type}<br><small>(${log.crop || '未設定'})</small></td>
-            <td>${log.worker}</td>
-            <td>${mediaHtml}</td>
+            <td>${log.crop || '未設定'}</td>
+            <td>${log.type}</td>
             <td>${log.notes}</td>
+            <td>${mediaHtml}</td>
+            <td>${log.worker}</td>
         `;
         body.appendChild(tr);
     });
+}
+
+function updateSortIcons() {
+    document.querySelectorAll('#history-table th.sortable').forEach(th => {
+        th.classList.remove('active-sort');
+        const icon = th.querySelector('.sort-icon');
+        if (!icon) return;
+
+        if (th.dataset.sort === state.sortConfig.key) {
+            th.classList.add('active-sort');
+            icon.setAttribute('data-lucide', state.sortConfig.direction === 'asc' ? 'chevron-up' : 'chevron-down');
+        } else {
+            icon.setAttribute('data-lucide', 'chevrons-up-down');
+        }
+    });
+    lucide.createIcons();
 }
 
 function showModal(type) {
@@ -621,18 +845,23 @@ function hideModal() { document.getElementById('modal-overlay').classList.add('h
 
 async function handleLogSubmit(e) {
     e.preventDefault();
-    let mediaData = null;
-    const mediaFile = document.getElementById('input-media').files[0];
-    if (mediaFile) {
-        mediaData = await new Promise((resolve) => {
-            const reader = new FileReader();
-            reader.onload = (event) => resolve({
-                url: event.target.result,
-                type: mediaFile.type
+    let mediaList = [];
+    const mediaFiles = document.getElementById('input-media').files;
+
+    if (mediaFiles.length > 0) {
+        const promises = Array.from(mediaFiles).map(file => {
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = (event) => resolve({
+                    url: event.target.result,
+                    type: file.type
+                });
+                reader.readAsDataURL(file);
             });
-            reader.readAsDataURL(mediaFile);
         });
+        mediaList = await Promise.all(promises);
     }
+
     const newLog = {
         id: 'l_' + Date.now(),
         date: document.getElementById('input-date').value,
@@ -640,7 +869,7 @@ async function handleLogSubmit(e) {
         type: document.getElementById('select-type').value,
         worker: document.getElementById('input-worker').value,
         crop: document.getElementById('select-crop-target').value,
-        media: mediaData,
+        mediaList: mediaList,
         notes: document.getElementById('input-notes').value
     };
     state.logs.push(newLog);
@@ -656,6 +885,8 @@ function renderAll() {
     renderHistory();
     renderFieldsList();
     renderFarmsList();
+    updateCropSelects(); // 作物リストを更新
+    updateTaskTypeSelects(); // 作業内容リストを更新
     lucide.createIcons(); // アイコンを確実に表示
 }
 
@@ -678,7 +909,7 @@ function exportHistoryCSV() {
         return;
     }
 
-    const headers = ['日付', '農場', '圃場', '作業内容', '作業者', '対象作物', 'メモ'];
+    const headers = ['日付', '農場', '圃場', '対象作物', '作業内容', 'メモ', '作業者'];
     const rows = state.logs.map(log => {
         const field = state.fields.find(f => f.id === log.fieldId);
         const farm = field ? state.farms.find(f => f.id === field.farmId) : null;
@@ -686,10 +917,10 @@ function exportHistoryCSV() {
             log.date,
             farm ? farm.name : '未割当',
             field ? field.name : '不明',
-            log.type,
-            log.worker,
             log.crop || '未設定',
-            log.notes.replace(/\n/g, ' ') // 改行をスペースに置換
+            log.type,
+            log.notes.replace(/\n/g, ' '), // 改行をスペースに置換
+            log.worker
         ];
     });
 
