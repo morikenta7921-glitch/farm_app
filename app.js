@@ -62,6 +62,12 @@ function loadData() {
     if (savedLogs) state.logs = JSON.parse(savedLogs);
     renderAll();
 
+    // ローカルデータがある場合は即座にフォーカス（Firebaseを待たずに表示）
+    if (!state.hasInitialFocus && state.farms.length > 0) {
+        state.hasInitialFocus = true;
+        autoFocusFirstFarm();
+    }
+
     // 接続状態の監視
     db.ref('.info/connected').on('value', (snap) => {
         if (snap.val() === true) {
@@ -126,7 +132,7 @@ function saveData() {
     };
 
     // Firebase（クラウド）へ保存
-    db.ref('farmData').set(dataToSave).then(() => {
+    const cloudPromise = db.ref('farmData').set(dataToSave).then(() => {
         console.log("Cloud Save Success");
     }).catch(err => {
         console.error("Firebase Save Error:", err);
@@ -137,6 +143,10 @@ function saveData() {
     localStorage.setItem('fm_farms', JSON.stringify(state.farms));
     localStorage.setItem('fm_fields', JSON.stringify(state.fields));
     localStorage.setItem('fm_logs', JSON.stringify(state.logs));
+    localStorage.setItem('fm_crops', JSON.stringify(state.crops));
+    localStorage.setItem('fm_task_types', JSON.stringify(state.taskTypes));
+
+    return cloudPromise;
 }
 
 function setupEventListeners() {
@@ -183,9 +193,12 @@ function setupEventListeners() {
     document.querySelectorAll('.btn-close-modal').forEach(btn => btn.addEventListener('click', hideModal));
     document.getElementById('form-operation').addEventListener('submit', handleLogSubmit);
 
-    // Export History button
+    // Export History buttons
     const btnExport = document.getElementById('btn-export-history');
     if (btnExport) btnExport.addEventListener('click', exportHistoryCSV);
+
+    const btnReport = document.getElementById('btn-export-report');
+    if (btnReport) btnReport.addEventListener('click', exportHistoryReport);
 
     document.getElementById('btn-import-trigger').addEventListener('click', () => document.getElementById('input-geojson').click());
     document.getElementById('input-geojson').addEventListener('change', handleGeoJSONImport);
@@ -209,6 +222,7 @@ function setupEventListeners() {
             state.farms.push({ id: 'farm_' + Date.now(), name: name });
             saveData();
             renderFarmsList();
+            showToast('農場を追加しました');
         }
     });
 
@@ -377,6 +391,7 @@ function finishDrawing() {
     state.fields.push(newField);
     saveData();
     renderAll();
+    showToast('圃場を登録しました');
 
     if (state.tempPolygon) {
         map.removeLayer(state.tempPolygon);
@@ -731,15 +746,22 @@ function focusOnFarm(farmId) {
 }
 
 function autoFocusFirstFarm() {
-    if (state.farms.length > 0) {
-        const firstFarm = state.farms[0];
-        const farmFields = state.fields.filter(f => f.farmId === firstFarm.id);
+    // 圃場が登録されている最初の農場を探す
+    const farmWithFields = state.farms.find(farm =>
+        state.fields.some(field => field.farmId === farm.id)
+    );
+
+    // もし圃場付きの農場が見つかればそこにズーム、なければ単純に最初の農場の圃場（あれば）を探す
+    const targetFarm = farmWithFields || (state.farms.length > 0 ? state.farms[0] : null);
+
+    if (targetFarm) {
+        const farmFields = state.fields.filter(f => f.farmId === targetFarm.id);
         if (farmFields.length > 0) {
             const bounds = L.latLngBounds();
             farmFields.forEach(field => {
                 field.polygon.forEach(coord => bounds.extend(coord));
             });
-            map.fitBounds(bounds, { padding: [80, 80], maxZoom: 19 }); // 17 -> 19 へ引き上げ
+            map.fitBounds(bounds, { padding: [80, 80], maxZoom: 19 });
         }
     }
 }
@@ -750,6 +772,7 @@ function deleteFarm(id) {
     state.fields = state.fields.filter(f => f.farmId !== id);
     saveData();
     renderAll();
+    showToast('農場を削除しました');
 }
 
 function renameFarm(id) {
@@ -876,7 +899,7 @@ async function handleLogSubmit(e) {
     saveData();
     hideModal();
     renderAll();
-    showToast('作業を正常に登録しました');
+    showToast('作業を登録しました');
     e.target.reset();
 }
 
@@ -896,7 +919,9 @@ function showToast(message) {
     toast.className = 'toast';
     toast.innerHTML = `<i data-lucide="check-circle"></i> ${message}`;
     container.appendChild(toast);
-    lucide.createIcons();
+
+    // アイコンの反映を確実にするため少し遅らせる
+    setTimeout(() => lucide.createIcons(), 10);
 
     setTimeout(() => {
         toast.remove();
@@ -936,6 +961,99 @@ function exportHistoryCSV() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    showToast('CSVを出力しました');
+}
+
+function exportHistoryReport() {
+    if (state.logs.length === 0) {
+        alert('出力するデータがありません。');
+        return;
+    }
+
+    // 現在のソート設定を反映
+    const sortedLogs = [...state.logs].sort((a, b) => {
+        let valA = a[state.sortConfig.key] || '';
+        let valB = b[state.sortConfig.key] || '';
+        if (state.sortConfig.key === 'fieldId') {
+            valA = state.fields.find(f => f.id === a.fieldId)?.name || '';
+            valB = state.fields.find(f => f.id === b.fieldId)?.name || '';
+        }
+        if (valA < valB) return state.sortConfig.direction === 'asc' ? -1 : 1;
+        if (valA > valB) return state.sortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
+    });
+
+    let reportHtml = `
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>作業日報レポート_${new Date().toLocaleDateString()}</title>
+    <style>
+        body { font-family: 'Helvetica Neue', Arial, sans-serif; color: #333; line-height: 1.6; padding: 40px; }
+        h1 { border-bottom: 2px solid #2d5a27; padding-bottom: 10px; color: #2d5a27; }
+        .log-entry { border: 1px solid #ddd; border-radius: 8px; margin-bottom: 30px; padding: 20px; page-break-inside: avoid; }
+        .log-header { font-weight: bold; background: #f9f9f9; padding: 10px; margin: -20px -20px 15px -20px; border-radius: 8px 8px 0 0; display: flex; justify-content: space-between; }
+        .meta-info { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 15px; }
+        .meta-item { font-size: 0.9rem; }
+        .meta-label { color: #666; font-size: 0.8rem; display: block; }
+        .notes { background: #fffbe6; padding: 10px; border-left: 4px solid #ffe58f; margin: 10px 0; }
+        .media-grid { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 15px; }
+        .media-item { width: 200px; height: 150px; object-fit: cover; border-radius: 4px; border: 1px solid #eee; }
+        @media print { body { padding: 0; } .log-entry { border-color: #eee; } }
+    </style>
+</head>
+<body>
+    <h1>🌾 作業日報レポート</h1>
+    <p>出力日: ${new Date().toLocaleString()}</p>
+    `;
+
+    sortedLogs.forEach(log => {
+        const fieldName = state.fields.find(f => f.id === log.fieldId)?.name || '不明';
+        const farmName = state.farms.find(f => f.id === (state.fields.find(f => f.id === log.fieldId)?.farmId))?.name || '未割当';
+
+        reportHtml += `
+        <div class="log-entry">
+            <div class="log-header">
+                <span>${log.date}</span>
+                <span>${log.type}</span>
+            </div>
+            <div class="meta-info">
+                <div class="meta-item"><span class="meta-label">農場 / 圃場</span>${farmName} / ${fieldName}</div>
+                <div class="meta-item"><span class="meta-label">対象作物</span>${log.crop || '未設定'}</div>
+                <div class="meta-item"><span class="meta-label">作業者</span>${log.worker || '-'}</div>
+            </div>
+            <div class="notes"><span class="meta-label">作業メモ</span>${log.notes || '-'}</div>
+            <div class="media-grid">
+        `;
+
+        const mediaList = log.mediaList || (log.media ? [log.media] : []);
+        mediaList.forEach(m => {
+            if (m.type.startsWith('image/')) {
+                reportHtml += `<img src="${m.url}" class="media-item">`;
+            } else if (m.type.startsWith('video/')) {
+                reportHtml += `<video src="${m.url}" class="media-item" controls></video>`;
+            }
+        });
+
+        reportHtml += `
+            </div>
+        </div>
+        `;
+    });
+
+    reportHtml += `</body></html>`;
+
+    // ダウンロード処理
+    const blob = new Blob([reportHtml], { type: 'text/html;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `作業レポート_${new Date().toISOString().slice(0, 10)}.html`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showToast('ビジュアルレポートを出力しました');
 }
 
 init();
