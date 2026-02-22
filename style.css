@@ -394,9 +394,11 @@ td {
 }
 
 .modal {
-    width: 90%;
+    width: 95%;
     max-width: 500px;
-    padding: 2rem;
+    padding: 1.5rem;
+    max-height: 90vh;
+    overflow-y: auto;
 }
 
 .modal.hidden {
@@ -557,6 +559,34 @@ textarea:focus {
 
     .sidebar {
         display: none;
+    }
+
+    main {
+        padding: 10px 10px 80px 10px !important;
+    }
+
+    .history-container,
+    .fields-container,
+    .farms-container {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        margin: 0;
+        width: 100%;
+    }
+
+    table {
+        min-width: 600px;
+    }
+
+    .modal {
+        width: 95% !important;
+        padding: 1.2rem !important;
+    }
+
+    input,
+    select,
+    textarea {
+        font-size: 16px !important;
     }
 
     .floating-menu-btn.sidebar-btn {
