@@ -39,6 +39,8 @@
                 <li data-view="farms"><i data-lucide="home"></i><span>農場一覧</span></li>
                 <li data-view="fields"><i data-lucide="layers"></i><span>圃場一覧</span></li>
                 <li data-view="history"><i data-lucide="list"></i><span>作業履歴</span></li>
+                <li id="btn-logout" style="margin-top: auto; color: #ff6b6b;"><i
+                        data-lucide="log-out"></i><span>ログアウト</span></li>
             </ul>
         </nav>
 
@@ -161,6 +163,28 @@
 
         <!-- Modal for Registration -->
         <div id="modal-overlay" class="hidden">
+            <!-- Login Modal -->
+            <div id="modal-login" class="modal glass hidden" style="max-width: 350px;">
+                <header>
+                    <h2>ログイン</h2>
+                </header>
+                <form id="form-login">
+                    <div class="form-group">
+                        <label>メールアドレス</label>
+                        <input type="email" id="login-email" required placeholder="example@mail.com">
+                    </div>
+                    <div class="form-group">
+                        <label>パスワード</label>
+                        <input type="password" id="login-password" required placeholder="••••••••">
+                    </div>
+                    <div style="display: flex; gap: 10px;">
+                        <button type="submit" id="btn-do-login" class="btn-submit">ログイン</button>
+                        <button type="button" id="btn-do-register" class="btn-secondary"
+                            style="margin-top: 1rem; width: 100%; justify-content: center;">新規登録</button>
+                    </div>
+                </form>
+            </div>
+
             <!-- Existing Opeartion Form -->
             <div id="modal-operation" class="modal glass hidden">
                 <header>
@@ -242,6 +266,7 @@
         integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
     <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
 
     <script src="app.js"></script>

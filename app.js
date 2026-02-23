@@ -12,6 +12,7 @@ const firebaseConfig = {
 // Initialize Firebase
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
+const auth = firebase.auth();
 
 // State Management
 let state = {
@@ -25,9 +26,41 @@ let state = {
     pendingGeoJSON: null,
     hasInitialFocus: false, // 初回起動時のフォーカス管理
     sortConfig: { key: 'date', direction: 'desc' }, // 履歴のソート設定
-    crops: [], // 作物リスト
+    crops: [], // 作物リスト: [{name, color}, ...]
     taskTypes: [] // 作業内容リスト
 };
+
+const CROP_COLORS = [
+    '#4c8c4a', // 緑
+    '#f29f05', // オレンジ
+    '#2d5a27', // 深緑
+    '#d94d4d', // 赤
+    '#4d79d9', // 青
+    '#9c4dd9', // 紫
+    '#d94d9c', // ピンク
+    '#79d94d', // 黄緑
+    '#4dd9d9', // 水色
+    '#8b4513'  // 茶色
+];
+
+const CROP_COLOR_LABELS = [
+    "1: 緑", "2: オレンジ", "3: 深緑", "4: 赤", "5: 青",
+    "6: 紫", "7: ピンク", "8: 黄緑", "9: 水色", "10: 茶色"
+];
+
+function getCropColor(cropName) {
+    if (!cropName || cropName === '未設定') return '#FFFEF6';
+    const cleanName = cropName.trim();
+    const cropObj = state.crops.find(c => c.name.trim() === cleanName);
+    if (cropObj && cropObj.color) return cropObj.color;
+
+    // 見つからない場合は名前からハッシュで色を決定
+    let hash = 0;
+    for (let i = 0; i < cleanName.length; i++) {
+        hash = cleanName.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return CROP_COLORS[Math.abs(hash) % CROP_COLORS.length];
+}
 
 // Initialize Map
 const map = L.map('map', {
@@ -51,15 +84,32 @@ function init() {
 }
 
 function loadData() {
+    auth.onAuthStateChanged((user) => {
+        if (user) {
+            hideModal();
+            startDataSync();
+        } else {
+            showModal('login');
+        }
+    });
+}
+
+function startDataSync() {
     console.log("Connecting to Firebase...");
 
     // まずローカルのデータを一旦読み込んで表示（レスポンス改善）
     const savedFarms = localStorage.getItem('fm_farms');
     const savedFields = localStorage.getItem('fm_fields');
     const savedLogs = localStorage.getItem('fm_logs');
+    const savedCrops = localStorage.getItem('fm_crops');
+    const savedTaskTypes = localStorage.getItem('fm_task_types');
+
     if (savedFarms) state.farms = JSON.parse(savedFarms);
     if (savedFields) state.fields = JSON.parse(savedFields);
     if (savedLogs) state.logs = JSON.parse(savedLogs);
+    if (savedCrops) state.crops = JSON.parse(savedCrops);
+    if (savedTaskTypes) state.taskTypes = JSON.parse(savedTaskTypes);
+
     renderAll();
 
     // ローカルデータがある場合は即座にフォーカス（Firebaseを待たずに表示）
@@ -84,7 +134,16 @@ function loadData() {
             state.farms = data.farms || [];
             state.fields = data.fields || [];
             state.logs = data.logs || [];
-            state.crops = data.crops || ["コシヒカリ", "つや姫", "新之助", "あきたこまち"];
+
+            // 作物リストをオブジェクト形式に正規化
+            const rawCrops = data.crops || ["コシヒカリ", "つや姫", "新之助", "あきたこまち"];
+            state.crops = rawCrops.map((c, i) => {
+                if (typeof c === 'string') {
+                    return { name: c, color: CROP_COLORS[i % CROP_COLORS.length] };
+                }
+                return c;
+            });
+
             state.taskTypes = data.taskTypes || ["播種", "田植え", "施肥", "防除", "収穫"];
             renderAll();
 
@@ -190,6 +249,10 @@ function setupEventListeners() {
     // Regular Registration Button
     document.getElementById('btn-add-log').addEventListener('click', () => showModal('operation'));
 
+    document.getElementById('btn-logout').addEventListener('click', handleLogout);
+    document.getElementById('form-login').addEventListener('submit', handleLogin);
+    document.getElementById('btn-do-register').addEventListener('click', handleRegister);
+
     document.querySelectorAll('.btn-close-modal').forEach(btn => btn.addEventListener('click', hideModal));
     document.getElementById('form-operation').addEventListener('submit', handleLogSubmit);
 
@@ -230,20 +293,56 @@ function setupEventListeners() {
         const val = e.target.value;
         if (val === '__add__') {
             const name = prompt("追加する作物の名前を入力してください:");
-            if (name && !state.crops.includes(name)) {
-                state.crops.push(name);
+            if (name && !state.crops.some(c => c.name === name)) {
+                const guide = CROP_COLOR_LABELS.join('\n');
+                const userInput = prompt(`作物の色を番号（1-10）で選ぶか、カラーコード（例: #FF00FF）を入力してください:\n${guide}`, "1");
+
+                let color;
+                if (userInput && userInput.startsWith('#')) {
+                    color = userInput; // 直接指定
+                } else {
+                    const idx = parseInt(userInput) - 1;
+                    color = CROP_COLORS[idx % CROP_COLORS.length] || CROP_COLORS[0];
+                }
+
+                state.crops.push({ name: name, color: color });
                 saveData();
                 updateCropSelects();
                 e.target.value = name;
+                renderAll();
             } else {
                 e.target.value = "未設定";
             }
         } else if (val === '__remove__') {
             const target = prompt("削除する作物の名前を確認のため正確に入力してください:\n(登録済みの履歴には影響しません)");
-            if (target && state.crops.includes(target)) {
-                state.crops = state.crops.filter(c => c !== target);
+            if (target && state.crops.some(c => c.name === target)) {
+                state.crops = state.crops.filter(c => c.name !== target);
                 saveData();
                 updateCropSelects();
+                renderAll();
+            }
+            e.target.value = "未設定";
+        } else if (val === '__edit_color__') {
+            const cropList = state.crops.map((c, i) => `${i + 1}: ${c.name}`).join('\n');
+            const cropIdx = prompt(`色を変更する作物を選んでください:\n${cropList}`);
+            const selectedCrop = state.crops[parseInt(cropIdx) - 1];
+
+            if (selectedCrop) {
+                const guide = CROP_COLOR_LABELS.join('\n');
+                const userInput = prompt(`「${selectedCrop.name}」の新しい色を番号（1-10）で選ぶか、カラーコード（例: #FF00FF）を入力してください:\n${guide}`, "1");
+
+                let color;
+                if (userInput && userInput.startsWith('#')) {
+                    color = userInput;
+                } else {
+                    const idx = parseInt(userInput) - 1;
+                    color = CROP_COLORS[idx % CROP_COLORS.length] || CROP_COLORS[0];
+                }
+
+                selectedCrop.color = color;
+                saveData();
+                renderAll();
+                showToast(`${selectedCrop.name}の色を更新しました`);
             }
             e.target.value = "未設定";
         }
@@ -386,7 +485,7 @@ function finishDrawing() {
         area: area,
         farmId: farmId,
         polygon: state.tempPoints,
-        color: '#4c8c4a'
+        color: '#FFFEF6'
     };
     state.fields.push(newField);
     saveData();
@@ -423,8 +522,9 @@ function renderFieldsOnMap() {
     });
 
     state.fields.forEach(field => {
+        const cropColor = getCropColor(field.crop);
         const poly = L.polygon(field.polygon, {
-            color: field.color,
+            color: cropColor,
             fillOpacity: 0.4,
             weight: 2
         }).addTo(map);
@@ -495,8 +595,8 @@ function updateCropSelects() {
 
     state.crops.forEach(crop => {
         const opt = document.createElement('option');
-        opt.value = crop;
-        opt.innerText = crop;
+        opt.value = crop.name;
+        opt.innerText = crop.name;
         select.appendChild(opt);
     });
 
@@ -504,10 +604,11 @@ function updateCropSelects() {
     select.innerHTML += `
         <option value="" disabled>──────────</option>
         <option value="__add__">+ 新しい作物を追加</option>
+        <option value="__edit_color__">🎨 作物の色を変更</option>
         <option value="__remove__">× 作物を削除</option>
     `;
 
-    if (state.crops.includes(currentVal) || currentVal === "未設定") {
+    if (state.crops.some(c => c.name === currentVal) || currentVal === "未設定") {
         select.value = currentVal;
     }
 }
@@ -672,9 +773,22 @@ function deleteField(id) {
 function editFieldCrop(id) {
     const field = state.fields.find(f => f.id === id);
     if (!field) return;
-    const newCrop = prompt(`「${field.name}」の作物を入力してください:`, field.crop);
+
+    const cropList = state.crops.map(c => c.name).join(', ');
+    const newCrop = prompt(`「${field.name}」の作物を入力してください:\n(登録済み: ${cropList})`, field.crop);
+
     if (newCrop !== null) {
-        field.crop = newCrop || '未設定';
+        const cleanCrop = newCrop.trim() || '未設定';
+        field.crop = cleanCrop;
+
+        // もし新しい作物名なら、自動的に作物リストに追加（色は自動割当）
+        if (cleanCrop !== '未設定' && !state.crops.some(c => c.name === cleanCrop)) {
+            state.crops.push({
+                name: cleanCrop,
+                color: CROP_COLORS[state.crops.length % CROP_COLORS.length]
+            });
+        }
+
         saveData();
         renderAll();
         showToast('作物を更新しました');
@@ -926,6 +1040,51 @@ function showToast(message) {
     setTimeout(() => {
         toast.remove();
     }, 3500);
+}
+
+// Auth Handlers
+async function handleLogin(e) {
+    e.preventDefault();
+    const email = document.getElementById('login-email').value;
+    const password = document.getElementById('login-password').value;
+
+    try {
+        await auth.signInWithEmailAndPassword(email, password);
+        showToast('ログインしました');
+    } catch (error) {
+        alert('ログイン失敗: ' + error.message);
+    }
+}
+
+async function handleRegister() {
+    const email = document.getElementById('login-email').value;
+    const password = document.getElementById('login-password').value;
+
+    if (!email || !password) {
+        alert('メールアドレスとパスワードを入力してください。');
+        return;
+    }
+    if (password.length < 6) {
+        alert('パスワードは6文字以上で設定してください。');
+        return;
+    }
+
+    try {
+        await auth.createUserWithEmailAndPassword(email, password);
+        showToast('アカウントを作成しました');
+    } catch (error) {
+        alert('登録失敗: ' + error.message);
+    }
+}
+
+async function handleLogout() {
+    if (!confirm('ログアウトしますか？')) return;
+    try {
+        await auth.signOut();
+        location.reload(); // 全状態をリセット
+    } catch (error) {
+        alert('ログアウトエラー: ' + error.message);
+    }
 }
 
 function exportHistoryCSV() {
