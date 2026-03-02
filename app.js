@@ -27,7 +27,8 @@ let state = {
     hasInitialFocus: false, // 初回起動時のフォーカス管理
     sortConfig: { key: 'date', direction: 'desc' }, // 履歴のソート設定
     crops: [], // 作物リスト: [{name, color}, ...]
-    taskTypes: [] // 作業内容リスト
+    taskTypes: [], // 作業内容リスト
+    tasks: [] // ToDoタスクリスト: [{id, text, completed, createdAt}]
 };
 
 const CROP_COLORS = [
@@ -109,6 +110,7 @@ function startDataSync() {
     if (savedLogs) state.logs = JSON.parse(savedLogs);
     if (savedCrops) state.crops = JSON.parse(savedCrops);
     if (savedTaskTypes) state.taskTypes = JSON.parse(savedTaskTypes);
+    if (localStorage.getItem('fm_tasks')) state.tasks = JSON.parse(localStorage.getItem('fm_tasks'));
 
     renderAll();
 
@@ -145,6 +147,7 @@ function startDataSync() {
             });
 
             state.taskTypes = data.taskTypes || ["播種", "田植え", "施肥", "防除", "収穫"];
+            state.tasks = data.tasks || [];
             renderAll();
 
             // 初回読み込み時のみ、一番上の農場へ自動ズーム
@@ -187,7 +190,8 @@ function saveData() {
         fields: state.fields,
         logs: state.logs,
         crops: state.crops,
-        taskTypes: state.taskTypes
+        taskTypes: state.taskTypes,
+        tasks: state.tasks
     };
 
     // Firebase（クラウド）へ保存
@@ -204,6 +208,7 @@ function saveData() {
     localStorage.setItem('fm_logs', JSON.stringify(state.logs));
     localStorage.setItem('fm_crops', JSON.stringify(state.crops));
     localStorage.setItem('fm_task_types', JSON.stringify(state.taskTypes));
+    localStorage.setItem('fm_tasks', JSON.stringify(state.tasks));
 
     return cloudPromise;
 }
@@ -419,6 +424,7 @@ function switchView(viewName) {
         if (viewName === 'farms') renderFarmsList();
         else if (viewName === 'fields') renderFieldsList();
         else if (viewName === 'history') renderHistory();
+        else if (viewName === 'tasks') renderTasks();
     }
 
     setTimeout(() => map.invalidateSize(), 150);
@@ -1022,9 +1028,86 @@ function renderAll() {
     renderHistory();
     renderFieldsList();
     renderFarmsList();
+    renderTasks(); // タスク描画を追加
     updateCropSelects(); // 作物リストを更新
     updateTaskTypeSelects(); // 作業内容リストを更新
     lucide.createIcons(); // アイコンを確実に表示
+}
+
+/**
+ * ToDoタスク関連の関数
+ */
+function addTodoTask(text) {
+    const newTodo = {
+        id: 't_' + Date.now(),
+        text: text,
+        completed: false,
+        createdAt: new Date().toISOString()
+    };
+    state.tasks.unshift(newTodo);
+    saveData();
+    renderTasks();
+}
+
+function toggleTaskStatus(id) {
+    const task = state.tasks.find(t => t.id === id);
+    if (task) {
+        task.completed = !task.completed;
+        saveData();
+        renderTasks();
+    }
+}
+
+function deleteTaskTask(id) {
+    if (!confirm('タスクを削除しますか？')) return;
+    state.tasks = state.tasks.filter(t => t.id !== id);
+    saveData();
+    renderTasks();
+}
+
+function renderTasks() {
+    const body = document.getElementById('todo-body');
+    if (!body) return;
+    body.innerHTML = '';
+
+    const filteredTasks = state.tasks.filter(task => {
+        if (currentTaskFilter === 'active') return !task.completed;
+        if (currentTaskFilter === 'completed') return task.completed;
+        return true;
+    });
+
+    if (filteredTasks.length === 0) {
+        body.innerHTML = `<div class="empty-state">タスクがありません。</div>`;
+        return;
+    }
+
+    filteredTasks.forEach(task => {
+        const item = document.createElement('div');
+        item.className = `todo-item {task.completed ? 'completed' : ''}`;
+        // バッククォートのエスケープに注意
+        item.innerHTML = `
+            <div class="checkbox-custom" role="checkbox" aria-checked="${task.completed}"></div>
+            <span class="todo-text">${escapeHtml(task.text)}</span>
+            <button class="delete-btn" aria-label="削除"><i data-lucide="x"></i></button>
+        `;
+
+        item.querySelector('.checkbox-custom').onclick = () => toggleTaskStatus(task.id);
+        item.querySelector('.todo-text').onclick = () => toggleTaskStatus(task.id);
+        item.querySelector('.delete-btn').onclick = (e) => {
+            e.stopPropagation();
+            deleteTaskTask(task.id);
+        };
+
+        body.appendChild(item);
+    });
+
+    lucide.createIcons();
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
 }
 
 function showToast(message) {

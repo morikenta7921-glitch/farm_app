@@ -39,6 +39,7 @@
                 <li data-view="farms"><i data-lucide="home"></i><span>農場一覧</span></li>
                 <li data-view="fields"><i data-lucide="layers"></i><span>圃場一覧</span></li>
                 <li data-view="history"><i data-lucide="list"></i><span>作業履歴</span></li>
+                <li data-view="tasks"><i data-lucide="check-square"></i><span>タスク</span></li>
                 <li id="btn-logout" style="margin-top: auto; color: #ff6b6b;"><i
                         data-lucide="log-out"></i><span>ログアウト</span></li>
             </ul>
@@ -151,6 +152,29 @@
                 </div>
             </section>
 
+            <!-- Tasks View (ToDo List) -->
+            <section id="view-tasks" class="view">
+                <header class="view-header">
+                    <h1>タスク管理</h1>
+                </header>
+                <div class="tasks-container glass">
+                    <form id="todo-form" class="todo-input-group">
+                        <input type="text" id="todo-input" placeholder="新しいタスクを入力..." required>
+                        <button type="submit" id="todo-add-btn"><i data-lucide="plus"></i></button>
+                    </form>
+
+                    <nav class="task-filters">
+                        <button class="task-filter-btn active" data-filter="all">すべて</button>
+                        <button class="task-filter-btn" data-filter="active">未完了</button>
+                        <button class="task-filter-btn" data-filter="completed">完了</button>
+                    </nav>
+
+                    <div id="todo-body">
+                        <!-- Tasks will be injected here -->
+                    </div>
+                </div>
+            </section>
+
             <!-- Other Views... -->
         </main>
 
@@ -159,6 +183,7 @@
             <div class="nav-item" data-view="farms"><i data-lucide="home"></i><span>農場</span></div>
             <div class="nav-item" data-view="fields"><i data-lucide="layers"></i><span>圃場</span></div>
             <div class="nav-item" data-view="history"><i data-lucide="list"></i><span>履歴</span></div>
+            <div class="nav-item" data-view="tasks"><i data-lucide="check-square"></i><span>タスク</span></div>
         </nav>
 
         <!-- Modal for Registration -->
