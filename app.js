@@ -28,7 +28,8 @@ let state = {
     sortConfig: { key: 'date', direction: 'desc' }, // 履歴のソート設定
     crops: [], // 作物リスト: [{name, color}, ...]
     taskTypes: [], // 作業内容リスト
-    tasks: [] // ToDoタスクリスト: [{id, text, completed, createdAt}]
+    tasks: [], // ToDoタスクリスト: [{id, text, completed, createdAt}]
+    staleViews: { farms: true, fields: true, history: true, tasks: true } // レンダリングが必要なViewを追跡
 };
 
 const CROP_COLORS = [
@@ -420,15 +421,20 @@ function switchView(viewName) {
         // ただし、右側の歯車ボタン自体の状態（tools-minimized）は変更しない
         if (controls) controls.classList.add('controls-hidden');
 
-        // データ描画
-        if (viewName === 'farms') renderFarmsList();
-        else if (viewName === 'fields') renderFieldsList();
-        else if (viewName === 'history') renderHistory();
-        else if (viewName === 'tasks') renderTasks();
+        // データが古い（stale）場合、または表示切り替え時に最新化する
+        if (state.staleViews[viewName] || isAlreadyActive === false) {
+            if (viewName === 'farms') renderFarmsList();
+            else if (viewName === 'fields') renderFieldsList();
+            else if (viewName === 'history') renderHistory();
+            else if (viewName === 'tasks') renderTasks();
+            state.staleViews[viewName] = false;
+        }
     }
 
-    setTimeout(() => map.invalidateSize(), 150);
-    lucide.createIcons();
+    setTimeout(() => {
+        map.invalidateSize();
+        lucide.createIcons();
+    }, 150);
 }
 
 // Map Logic
@@ -720,6 +726,10 @@ function processGeoJSON(data, farmId) {
 
 // List Rendering
 function renderFieldsList() {
+    if (state.currentView !== 'fields') {
+        state.staleViews.fields = true;
+        return;
+    }
     const body = document.getElementById('fields-body');
     if (!body) return;
     body.innerHTML = '';
@@ -822,6 +832,10 @@ function editFieldFarm(id) {
 }
 
 function renderFarmsList() {
+    if (state.currentView !== 'farms') {
+        state.staleViews.farms = true;
+        return;
+    }
     const body = document.getElementById('farms-body');
     if (!body) return;
     body.innerHTML = '';
@@ -840,7 +854,6 @@ function renderFarmsList() {
         `;
         body.appendChild(tr);
     });
-    lucide.createIcons();
 }
 
 function focusOnFarm(farmId) {
@@ -907,6 +920,10 @@ function renameFarm(id) {
 }
 
 function renderHistory() {
+    if (state.currentView !== 'history') {
+        state.staleViews.history = true;
+        return;
+    }
     const body = document.getElementById('history-body');
     if (!body) return;
     body.innerHTML = '';
@@ -975,7 +992,6 @@ function updateSortIcons() {
             icon.setAttribute('data-lucide', 'chevrons-up-down');
         }
     });
-    lucide.createIcons();
 }
 
 function showModal(type) {
@@ -1024,14 +1040,28 @@ async function handleLogSubmit(e) {
 }
 
 function renderAll() {
+    // 地図は常に最新の状態を保つ
     renderFieldsOnMap();
-    renderHistory();
-    renderFieldsList();
-    renderFarmsList();
-    renderTasks(); // タスク描画を追加
-    updateCropSelects(); // 作物リストを更新
-    updateTaskTypeSelects(); // 作業内容リストを更新
-    lucide.createIcons(); // アイコンを確実に表示
+
+    // 全てのViewを「古い(stale)」とマークし、現在アクティブなViewのみ即座に描画する
+    const views = ['farms', 'fields', 'history', 'tasks'];
+    views.forEach(v => {
+        if (state.currentView === v) {
+            if (v === 'farms') renderFarmsList();
+            if (v === 'fields') renderFieldsList();
+            if (v === 'history') renderHistory();
+            if (v === 'tasks') renderTasks();
+            state.staleViews[v] = false;
+        } else {
+            state.staleViews[v] = true;
+        }
+    });
+
+    updateCropSelects();
+    updateTaskTypeSelects();
+
+    // アイコン生成を一括で行う
+    lucide.createIcons();
 }
 
 /**
@@ -1066,6 +1096,10 @@ function deleteTaskTask(id) {
 }
 
 function renderTasks() {
+    if (state.currentView !== 'tasks') {
+        state.staleViews.tasks = true;
+        return;
+    }
     const body = document.getElementById('todo-body');
     if (!body) return;
     body.innerHTML = '';
@@ -1100,8 +1134,6 @@ function renderTasks() {
 
         body.appendChild(item);
     });
-
-    lucide.createIcons();
 }
 
 function escapeHtml(text) {
