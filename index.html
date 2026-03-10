@@ -4,295 +4,121 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FarmManage | プレミアム営農管理</title>
-    <!-- Google Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link
-        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Outfit:wght@500;600;700&display=swap"
-        rel="stylesheet">
-    <!-- Leaflet CSS -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-    <link rel="stylesheet" href="style.css">
+    <title>Yearly Gantt Planner | 1年を俯瞰する工程管理</title>
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
+    <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
-    <div id="app" class="sidebar-minimized tools-minimized">
-        <!-- Floating Menu Toggles -->
-        <button id="btn-sidebar-toggle" class="floating-menu-btn sidebar-btn" title="メニュー">
-            <i data-lucide="menu"></i>
-        </button>
-        <button id="btn-tools-toggle" class="floating-menu-btn tools-btn" title="ツール">
-            <i data-lucide="settings"></i>
-        </button>
-
-        <!-- Sidebar Navigation -->
-        <nav class="sidebar">
-            <div class="logo">
-                <i data-lucide="sprout"></i>
-                <span>FarmManage</span>
+    <div id="app-container">
+        <header>
+            <div class="header-content">
+                <h1>Yearly Gantt Planner 2026</h1>
+                <p style="color: var(--text-dim); font-size: 0.8rem;">週単位のプロジェクトスケジュール</p>
             </div>
-            <ul class="nav-links">
-                <li data-view="farms"><i data-lucide="home"></i><span>農場一覧</span></li>
-                <li data-view="fields"><i data-lucide="layers"></i><span>圃場一覧</span></li>
-                <li data-view="history"><i data-lucide="list"></i><span>作業履歴</span></li>
-                <li data-view="tasks"><i data-lucide="check-square"></i><span>タスク</span></li>
-                <li id="btn-logout" style="margin-top: auto; color: #ff6b6b;"><i
-                        data-lucide="log-out"></i><span>ログアウト</span></li>
-            </ul>
-        </nav>
+            <div class="controls">
+                <button id="btn-add-task" class="btn-primary">
+                    <i data-lucide="plus"></i> 項目を追加
+                </button>
+            </div>
+        </header>
 
-        <!-- Main Content -->
-        <main>
-            <!-- Map View -->
-            <section id="view-map" class="view active">
-                <div id="map-container">
-                    <div id="map"></div>
-                    <div class="map-controls glass">
-                        <button id="btn-draw" title="圃場を描画"><i data-lucide="pentagon"></i><span>描画開始</span></button>
-                        <button id="btn-add-log-map" title="作業を登録"><i
-                                data-lucide="plus-circle"></i><span>作業登録</span></button>
-                        <button id="btn-import-trigger" title="QGISデータを取り込み"><i
-                                data-lucide="upload"></i><span>インポート</span></button>
-                        <input type="file" id="input-geojson" accept=".geojson,.json" class="hidden">
-                        <button id="btn-locate" title="現在地"><i data-lucide="locate"></i></button>
+        <main id="gantt-wrapper">
+            <div class="gantt-container">
+                <!-- Timeline Header -->
+                <div class="timeline-header" id="timeline-header">
+                    <div class="task-info-header">
+                        <div class="col-crop">作物</div>
+                        <div class="col-task">作業項目</div>
+                    </div>
+                    <div class="months-row" id="months-row">
+                        <!-- 月と週がJSで生成されます -->
                     </div>
                 </div>
-            </section>
 
-            <!-- History View -->
-            <section id="view-history" class="view">
-                <header class="view-header">
-                    <h1>作業履歴</h1>
-                    <div class="header-actions">
-                        <button id="btn-export-history" class="btn-secondary"><i
-                                data-lucide="download"></i>CSV出力</button>
-                        <button id="btn-export-report" class="btn-secondary"><i
-                                data-lucide="file-text"></i>レポート出力</button>
-                        <button id="btn-add-log" class="btn-primary"><i data-lucide="plus"></i>作業登録</button>
-                    </div>
-                </header>
-                <div class="history-container glass">
-                    <table id="history-table">
-                        <thead>
-                            <tr>
-                                <th class="sortable" data-sort="date">日付 <i data-lucide="chevrons-up-down"
-                                        class="sort-icon"></i></th>
-                                <th class="sortable" data-sort="fieldId">圃場 <i data-lucide="chevrons-up-down"
-                                        class="sort-icon"></i></th>
-                                <th class="sortable" data-sort="crop">対象作物 <i data-lucide="chevrons-up-down"
-                                        class="sort-icon"></i></th>
-                                <th class="sortable" data-sort="type">作業内容 <i data-lucide="chevrons-up-down"
-                                        class="sort-icon"></i></th>
-                                <th>メモ</th>
-                                <th>写真・動画</th>
-                                <th class="sortable" data-sort="worker">作業者 <i data-lucide="chevrons-up-down"
-                                        class="sort-icon"></i></th>
-                            </tr>
-                        </thead>
-                        <tbody id="history-body">
-                            <!-- Data injected via JS -->
-                        </tbody>
-                    </table>
+                <!-- Rows Content -->
+                <div id="gantt-rows-container">
+                    <!-- タスク行がJSで生成されます -->
                 </div>
-            </section>
-
-            <!-- Farms View -->
-            <section id="view-farms" class="view">
-                <header class="view-header">
-                    <h1>農場一覧</h1>
-                    <div class="header-actions">
-                        <button id="btn-add-farm" class="btn-primary"><i data-lucide="plus"></i>農場登録</button>
-                    </div>
-                </header>
-                <div class="farms-container glass">
-                    <table id="farms-table">
-                        <thead>
-                            <tr>
-                                <th>農場名</th>
-                                <th>圃場数</th>
-                                <th>操作</th>
-                            </tr>
-                        </thead>
-                        <tbody id="farms-body">
-                            <!-- Data injected via JS -->
-                        </tbody>
-                    </table>
-                </div>
-            </section>
-
-            <!-- Fields View -->
-            <section id="view-fields" class="view">
-                <header class="view-header">
-                    <h1>圃場一覧</h1>
-                    <div class="header-actions">
-                        <button id="btn-bulk-delete" class="btn-delete hidden"><i
-                                data-lucide="trash-2"></i>選択削除</button>
-                    </div>
-                </header>
-                <div class="fields-container glass">
-                    <table id="fields-table">
-                        <thead>
-                            <tr>
-                                <th style="width: 30px;"><input type="checkbox" id="check-all-fields"></th>
-                                <th>名前</th>
-                                <th class="hide-mobile">農場</th>
-                                <th>面積(a)</th>
-                                <th>作物</th>
-                                <th>操作</th>
-                            </tr>
-                        </thead>
-                        <tbody id="fields-body">
-                            <!-- Data injected via JS -->
-                        </tbody>
-                    </table>
-                </div>
-            </section>
-
-            <!-- Tasks View (ToDo List) -->
-            <section id="view-tasks" class="view">
-                <header class="view-header">
-                    <h1>タスク管理</h1>
-                </header>
-                <div class="tasks-container glass">
-                    <form id="todo-form" class="todo-input-group">
-                        <input type="text" id="todo-input" placeholder="新しいタスクを入力..." required>
-                        <button type="submit" id="todo-add-btn"><i data-lucide="plus"></i></button>
-                    </form>
-
-                    <nav class="task-filters">
-                        <button class="task-filter-btn active" data-filter="all">すべて</button>
-                        <button class="task-filter-btn" data-filter="active">未完了</button>
-                        <button class="task-filter-btn" data-filter="completed">完了</button>
-                    </nav>
-
-                    <div id="todo-body">
-                        <!-- Tasks will be injected here -->
-                    </div>
-                </div>
-            </section>
-
-            <!-- Other Views... -->
+            </div>
         </main>
-
-        <!-- Bottom Navigation (Mobile Only) -->
-        <nav class="bottom-nav">
-            <div class="nav-item" data-view="farms"><i data-lucide="home"></i><span>農場</span></div>
-            <div class="nav-item" data-view="fields"><i data-lucide="layers"></i><span>圃場</span></div>
-            <div class="nav-item" data-view="history"><i data-lucide="list"></i><span>履歴</span></div>
-            <div class="nav-item" data-view="tasks"><i data-lucide="check-square"></i><span>タスク</span></div>
-        </nav>
-
-        <!-- Modal for Registration -->
-        <div id="modal-overlay" class="hidden">
-            <!-- Login Modal -->
-            <div id="modal-login" class="modal glass hidden" style="max-width: 350px;">
-                <header>
-                    <h2>ログイン</h2>
-                </header>
-                <form id="form-login">
-                    <div class="form-group">
-                        <label>メールアドレス</label>
-                        <input type="email" id="login-email" required placeholder="example@mail.com">
-                    </div>
-                    <div class="form-group">
-                        <label>パスワード</label>
-                        <input type="password" id="login-password" required placeholder="••••••••">
-                    </div>
-                    <div style="display: flex; gap: 10px;">
-                        <button type="submit" id="btn-do-login" class="btn-submit">ログイン</button>
-                        <button type="button" id="btn-do-register" class="btn-secondary"
-                            style="margin-top: 1rem; width: 100%; justify-content: center;">新規登録</button>
-                    </div>
-                </form>
-            </div>
-
-            <!-- Existing Opeartion Form -->
-            <div id="modal-operation" class="modal glass hidden">
-                <header>
-                    <h2 id="modal-title">作業登録</h2>
-                    <button class="btn-close-modal"><i data-lucide="x"></i></button>
-                </header>
-                <form id="form-operation">
-                    <!-- ... fields reordered ... -->
-                    <div class="form-group">
-                        <label>日付</label>
-                        <input type="date" id="input-date" required>
-                    </div>
-                    <div class="form-group">
-                        <label>圃場</label>
-                        <select id="select-field" required>
-                            <option value="">選択してください</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>対象作物</label>
-                        <select id="select-crop-target" required>
-                            <option value="未設定">未設定</option>
-                            <option value="コシヒカリ">コシヒカリ</option>
-                            <option value="つや姫">つや姫</option>
-                            <option value="新之助">新之助</option>
-                            <option value="あきたこまち">あきたこまち</option>
-                            <option value="その他">その他</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>作業内容</label>
-                        <select id="select-type" required>
-                            <option value="播種">播種</option>
-                            <option value="田植え">田植え</option>
-                            <option value="施肥">施肥</option>
-                            <option value="防除">防除</option>
-                            <option value="収穫">収穫</option>
-                            <option value="その他">その他</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>メモ</label>
-                        <textarea id="input-notes" rows="3"></textarea>
-                    </div>
-                    <div class="form-group">
-                        <label>写真・動画</label>
-                        <input type="file" id="input-media" accept="image/*,video/*" multiple>
-                    </div>
-                    <div class="form-group">
-                        <label>作業者</label>
-                        <input type="text" id="input-worker" placeholder="氏名を入力">
-                    </div>
-                    <button type="submit" class="btn-submit">保存する</button>
-                </form>
-            </div>
-
-            <!-- Import Selection Form -->
-            <div id="modal-import" class="modal glass hidden">
-                <header>
-                    <h2>インポート設定</h2>
-                    <button class="btn-close-modal"><i data-lucide="x"></i></button>
-                </header>
-                <div class="form-group">
-                    <label>所属させる農場を選択</label>
-                    <select id="select-import-farm" required>
-                        <!-- Injected via JS -->
-                    </select>
-                </div>
-                <button id="btn-confirm-import" class="btn-submit">インポートを開始</button>
-            </div>
-        </div>
     </div>
 
-    <!-- Toast Notifications -->
-    <div id="toast-container"></div>
+    <!-- Task Modal -->
+    <div id="modal-overlay" class="hidden">
+        <div class="modal glass">
+            <h2 id="modal-title">項目の設定</h2>
+            <form id="task-form">
+                <input type="hidden" id="task-id">
+                <div class="form-group">
+                    <label>作物名 (大分類 - 例: トマト)</label>
+                    <input type="text" id="task-crop" placeholder="例: トマト">
+                </div>
+                <div class="form-group">
+                    <label>作業項目 (行の名前 - 例: 育苗、収穫)</label>
+                    <input type="text" id="task-name" placeholder="例: 育苗">
+                </div>
+                <div class="form-group">
+                    <label>タスクの形式</label>
+                    <select id="task-type">
+                        <option value="period">期間 (〇月〇日 〜 〇月〇日)</option>
+                        <option value="deadline">締切 (〇月〇日 までにやる)</option>
+                        <option value="sequential">連続 (完了後に次のステップが出現)</option>
+                    </select>
+                </div>
 
-    <!-- Leaflet JS -->
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-    <!-- Firebase SDK -->
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
+                <!-- 通常タスク用入力 -->
+                <div id="normal-task-inputs">
+                    <div class="form-group">
+                        <label id="subname-label">作業内容 (具体的なタスク名)</label>
+                        <input type="text" id="task-subname" placeholder="例: 播種、水やりなど">
+                    </div>
+                    <div class="form-group" id="date-inputs-grid"
+                        style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                        <div id="start-date-container">
+                            <label>開始日</label>
+                            <input type="date" id="task-start">
+                        </div>
+                        <div>
+                            <label id="end-date-label">終了日</label>
+                            <input type="date" id="task-end">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 連続型タスク用入力 -->
+                <div id="sequential-task-inputs" style="display: none;">
+                    <div class="form-group">
+                        <label>開始日 (最初のタスクが始まる日)</label>
+                        <input type="date" id="seq-start-date">
+                    </div>
+                    <div class="form-group" style="padding: 10px; background: rgba(0,0,0,0.2); border-radius: 6px;">
+                        <label>各ステップと締切日</label>
+                        <div id="seq-steps-container"
+                            style="display: flex; flex-direction: column; gap: 8px; margin-top:8px;">
+                            <!-- JSでステップ入力が動的に追加される -->
+                        </div>
+                        <button type="button" id="btn-add-seq-step"
+                            style="margin-top: 12px; padding: 6px 10px; background: rgba(56, 189, 248, 0.15); color: var(--primary); border: 1px dashed var(--primary); border-radius: 4px; cursor: pointer; width: 100%;">+
+                            ステップを追加</button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>進捗状況</label>
+                    <select id="task-progress">
+                        <option value="0">未完了 (Todo)</option>
+                        <option value="100">完了 (Done - 色が変わります)</option>
+                    </select>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" id="btn-delete" class="btn-delete hidden">削除</button>
+                    <button type="button" id="btn-cancel" class="btn-cancel">キャンセル</button>
+                    <button type="submit" class="btn-primary">保存する</button>
+                </div>
+            </form>
+        </div>
+    </div>
 
     <script src="app.js"></script>
 </body>
